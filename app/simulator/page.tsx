@@ -55,253 +55,85 @@ import {
   Trash2,
   Rocket,
 } from "lucide-react"
+import { fmtCurrency, toCSV, toLocalDateInputValue } from "@/lib/simulation/format"
+import { simulate } from "@/lib/simulation/engine"
+import { computeIRRFromRows } from "@/lib/simulation/irr"
+import {
+  calculateFireNumber,
+  calculateSupportedAnnualIncome,
+  solveMonthlyContributionForTarget,
+  solveYearsToTarget,
+} from "@/lib/simulation/solvers"
+import { validateInputs } from "@/lib/simulation/validation"
+import type { CompoundingMode, Scenario } from "@/packages/shared/types"
 
-/* ====================== Types & helpers ====================== */
-interface SimulationRow {
-  luna: string
-  month: number
-  "Valoare totală": number
-  "Contribuții cumulate": number
-  "Câștiguri cumulate": number
-  "Câștig lunar": number
-  "Valoare reală"?: number
-}
+const STORAGE_KEY = "investsim:simulator:v1"
+type ChartType = "area" | "line" | "bar"
 
-interface SimulationResult {
-  rows: SimulationRow[]
-  totalValue: number
-  totalContrib: number
-  totalGains: number
-  yieldPct: number
-  monthlyGrowth: number[]
-  totalValueReal?: number
-  yieldRealPct?: number
-}
-
-interface Scenario {
-  id: string
-  name: string
+type PersistedSimulatorState = {
   initial: number
   monthly: number
   years: number
   annualPct: number
-  color: string
-  reinvest?: boolean
-  note?: string
-  compounding?: "monthly" | "annual" | "daily"
-  annualFeePct?: number // %/an pe AUM
-  inflationPct?: number // %/an
-  stepUpAnnualPct?: number // %/an – creștere automată contribuție
-  taxOnWithdrawPct?: number // % pe câștigurile retrase (doar când reinvest=false)
+  reinvest: boolean
+  compounding: CompoundingMode
+  annualFeePct: number
+  inflationPct: number
+  stepUpAnnualPct: number
+  taxOnWithdrawPct: number
+  notes: string
+  scenarios: Scenario[]
+  startDate: string
+  targetAmount: number
+  monthlyExpenses: number
+  safeWithdrawalRate: number
+  delayYears: number
 }
 
-const fmtCurrency = (v: number): string =>
-  new Intl.NumberFormat("ro-RO", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0,
-  }).format(v)
-
-const fmtMonth = (idx: number, start: Date = new Date()): string => {
-  const d = new Date(start.getFullYear(), start.getMonth() + (idx - 1))
-  const month = d.toLocaleString("ro-RO", { month: "short" })
-  const showYear = d.getFullYear() !== start.getFullYear() || idx > 12
-  return month + (showYear ? ` '${String(d.getFullYear()).slice(2)}` : "")
+const defaultSimulatorState: PersistedSimulatorState = {
+  initial: 0,
+  monthly: 200,
+  years: 10,
+  annualPct: 8,
+  reinvest: true,
+  compounding: "monthly",
+  annualFeePct: 0,
+  inflationPct: 2.5,
+  stepUpAnnualPct: 0,
+  taxOnWithdrawPct: 10,
+  notes: "",
+  scenarios: [],
+  startDate: toLocalDateInputValue(),
+  targetAmount: 100_000,
+  monthlyExpenses: 1_500,
+  safeWithdrawalRate: 4,
+  delayYears: 3,
 }
 
-function toCSV(rows: SimulationRow[], scenarios: Scenario[]) {
-  if (!rows.length) return ""
-  const header = [
-    "Simulare Investiții - Export Raport",
-    `Data: ${new Date().toLocaleDateString("ro-RO")}`,
-    "",
-  ]
-  const scenariiLines = [
-    "SCENARII:",
-    ...scenarios.map(
-      (s) =>
-        `${s.name},Initial: €${s.initial},Lunar: €${s.monthly},Ani: ${s.years},Randament: ${s.annualPct}%`
-    ),
-    "",
-  ]
-  const headers = Object.keys(rows[0]) as (keyof SimulationRow)[]
-  const table = [headers.join(","), ...rows.map((r) => headers.map((h) => String(r[h])).join(","))]
-  return [...header, ...scenariiLines, ...table].join("\n")
-}
+function loadInitialState(): PersistedSimulatorState {
+  if (typeof window === "undefined") return defaultSimulatorState
 
-/* ====================== Enhanced Simulation Logic ====================== */
-function simulate(
-  initial: number,
-  monthly: number,
-  months: number,
-  annualRate: number, // ex: 0.08
-  opts?: {
-    reinvest?: boolean
-    startDate?: Date
-    compounding?: "monthly" | "annual" | "daily"
-    annualFeePct?: number // %/an pe AUM
-    inflationPct?: number // %/an (pentru “valoare reală”)
-    taxOnWithdrawPct?: number // % pe câștigul retras (doar când reinvest=false)
-    stepUpAnnualPct?: number // %/an creștere automată a contribuției lunare
-  }
-): SimulationResult {
-  const reinvest = opts?.reinvest ?? true
-  const startDate = opts?.startDate ?? new Date()
-  const comp = opts?.compounding ?? "monthly"
-  const feeAnnual = (opts?.annualFeePct ?? 0) / 100
-  const inflation = (opts?.inflationPct ?? 0) / 100
-  const taxW = (opts?.taxOnWithdrawPct ?? 0) / 100
-  const stepUp = (opts?.stepUpAnnualPct ?? 0) / 100
+  try {
+    const rawState = window.localStorage.getItem(STORAGE_KEY)
+    if (!rawState) return defaultSimulatorState
 
-  const monthlyRate = Math.pow(1 + annualRate, 1 / 12) - 1
-  const feeFactor = Math.pow(1 - feeAnnual, 1 / 12)
-  const deflator = (m: number) => Math.pow(1 + inflation, m / 12)
+    const savedState = JSON.parse(rawState) as Partial<PersistedSimulatorState>
 
-  let balance = initial
-  let withdrawnGains = 0
-  let contribSoFar = initial
-
-  const rows: SimulationRow[] = []
-  const monthlyGrowth: number[] = []
-
-  for (let m = 1; m <= months; m++) {
-    const balanceBeforeContrib = balance
-
-    const yearsPassed = Math.floor((m - 1) / 12)
-    const monthlyEff = monthly * Math.pow(1 + stepUp, yearsPassed)
-    balance += monthlyEff
-    contribSoFar += monthlyEff
-
-    // creștere (compunere)
-    let growthThisMonth = 0
-    if (comp === "monthly" || comp === "daily") {
-      growthThisMonth = balance * monthlyRate
-      balance += growthThisMonth
-    } else if (comp === "annual") {
-      if (m % 12 === 0) {
-        growthThisMonth = balance * annualRate
-        balance += growthThisMonth
-      }
+    return {
+      ...defaultSimulatorState,
+      ...savedState,
+      scenarios: Array.isArray(savedState.scenarios)
+        ? savedState.scenarios
+        : defaultSimulatorState.scenarios,
+      startDate:
+        typeof savedState.startDate === "string" && savedState.startDate.length > 0
+          ? savedState.startDate
+          : defaultSimulatorState.startDate,
     }
-
-    // fee AUM lunar
-    balance *= feeFactor
-
-    // fără reinvestire: retrag câștigul pozitiv al lunii și plătesc taxă pe el
-    if (!reinvest && growthThisMonth > 0) {
-      balance -= growthThisMonth
-      const netGain = growthThisMonth * (1 - taxW)
-      withdrawnGains += netGain
-    }
-
-    const wealth = balance + withdrawnGains
-    const totalGains = wealth - contribSoFar
-    const realWealth = wealth / deflator(m)
-
-    const monthlyGrowthPct =
-      balanceBeforeContrib > 0
-        ? ((balance - balanceBeforeContrib - monthlyEff) / balanceBeforeContrib) * 100
-        : 0
-    monthlyGrowth.push(monthlyGrowthPct)
-
-    rows.push({
-      luna: fmtMonth(m, startDate),
-      month: m,
-      "Valoare totală": Math.round(wealth),
-      "Contribuții cumulate": Math.round(contribSoFar),
-      "Câștiguri cumulate": Math.round(totalGains),
-      "Câștig lunar": Math.round(growthThisMonth),
-      "Valoare reală": Math.round(realWealth),
-    })
+  } catch (error) {
+    console.error("Nu s-a putut incarca starea simulatorului:", error)
+    return defaultSimulatorState
   }
-
-  const totalValue = balance + withdrawnGains
-  const totalContrib = contribSoFar
-  const totalGains = totalValue - totalContrib
-  const yieldPct = totalContrib > 0 ? (totalGains / totalContrib) * 100 : 0
-  const totalValueReal = rows[rows.length - 1]?.["Valoare reală"]
-  const yieldRealPct =
-    totalContrib > 0 && totalValueReal !== undefined
-      ? ((totalValueReal - totalContrib) / totalContrib) * 100
-      : undefined
-
-  return {
-    rows,
-    totalValue,
-    totalContrib,
-    totalGains,
-    yieldPct,
-    monthlyGrowth,
-    totalValueReal,
-    yieldRealPct,
-  }
-}
-
-function computeIRRFromRows(
-  rows: SimulationRow[],
-  params: {
-    initial: number
-    monthly: number
-    months: number
-    reinvest: boolean
-    totalValue: number
-    totalContrib: number
-  }
-): number | null {
-  const { initial, monthly, months, reinvest, totalValue, totalContrib } = params
-  if (months <= 0) return null
-
-  const cf = new Array(months + 1).fill(0)
-  cf[0] = -initial
-  for (let m = 1; m <= months; m++) {
-    cf[m] -= monthly
-    if (!reinvest) {
-      const gain = rows[m - 1]["Câștig lunar"] || 0
-      if (gain > 0) cf[m] += gain
-    }
-  }
-  cf[months] += reinvest ? totalValue : totalContrib
-
-  const npv = (r: number) => cf.reduce((acc, c, t) => acc + c / Math.pow(1 + r, t), 0)
-
-  let lo = -0.9,
-    hi = 1.0
-  let fLo = npv(lo),
-    fHi = npv(hi)
-  let tries = 0
-  while (fLo * fHi > 0 && tries < 10) {
-    hi *= 2
-    fHi = npv(hi)
-    tries++
-    if (hi > 10) break
-  }
-  if (fLo * fHi > 0) return null
-
-  for (let i = 0; i < 100; i++) {
-    const mid = (lo + hi) / 2
-    const fMid = npv(mid)
-    if (Math.abs(fMid) < 1e-7) return Math.pow(1 + mid, 12) - 1
-    if (fLo * fMid < 0) {
-      hi = mid
-      fHi = fMid
-    } else {
-      lo = mid
-      fLo = fMid
-    }
-  }
-  const r = (lo + hi) / 2
-  return Math.pow(1 + r, 12) - 1
-}
-
-function validateInputs(initial: number, monthly: number, years: number, annualPct: number) {
-  const errors: string[] = []
-  if (initial < 0) errors.push("Capitalul inițial nu poate fi negativ")
-  if (initial > 1_000_000) errors.push("Capitalul inițial pare prea mare (max €1M)")
-  if (monthly < 0) errors.push("Contribuția lunară nu poate fi negativă")
-  if (monthly > 50_000) errors.push("Contribuția lunară pare prea mare (max €50k)")
-  if (years < 1 || years > 50) errors.push("Durata trebuie să fie între 1-50 ani")
-  if (annualPct < -50 || annualPct > 50) errors.push("Randamentul trebuie să fie între -50% și 50%")
-  return errors
 }
 
 /* ====================== Mobile Drawer Component ====================== */
@@ -349,26 +181,79 @@ function MobileDrawer({
 
 /* ====================== App ====================== */
 export default function App() {
+  const [initialState] = useState<PersistedSimulatorState>(() => loadInitialState())
+
   // State principal (initial poate fi 0 OBLIGATORIU)
-  const [initial, setInitial] = useState(0)
-  const [monthly, setMonthly] = useState(200)
-  const [years, setYears] = useState(10)
-  const [annualPct, setAnnualPct] = useState(8)
-  const [reinvest, setReinvest] = useState(true)
+  const [initial, setInitial] = useState(initialState.initial)
+  const [monthly, setMonthly] = useState(initialState.monthly)
+  const [years, setYears] = useState(initialState.years)
+  const [annualPct, setAnnualPct] = useState(initialState.annualPct)
+  const [reinvest, setReinvest] = useState(initialState.reinvest)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [compounding] = useState<"monthly" | "annual" | "daily">("monthly")
-  const [annualFeePct] = useState(0) // extensibil
-  const [inflationPct] = useState(0) // extensibil
-  const [stepUpAnnualPct] = useState(0) // extensibil
-  const [taxOnWithdrawPct] = useState(10) // extensibil
+  const [compounding, setCompounding] = useState<CompoundingMode>(initialState.compounding)
+  const [annualFeePct, setAnnualFeePct] = useState(initialState.annualFeePct)
+  const [inflationPct, setInflationPct] = useState(initialState.inflationPct)
+  const [stepUpAnnualPct, setStepUpAnnualPct] = useState(initialState.stepUpAnnualPct)
+  const [taxOnWithdrawPct, setTaxOnWithdrawPct] = useState(initialState.taxOnWithdrawPct)
   const [showErrors, setShowErrors] = useState(false)
-  const [isCalculating, setIsCalculating] = useState(false)
-  const [chartType, setChartType] = useState<"area" | "line" | "bar">("area")
-  const [scenarios, setScenarios] = useState<Scenario[]>([])
+  const isCalculating = false
+  const [chartType, setChartType] = useState<ChartType>("area")
+  const [scenarios, setScenarios] = useState<Scenario[]>(initialState.scenarios)
   const [activeScenario, setActiveScenario] = useState<string | null>(null)
-  const [notes, setNotes] = useState("")
+  const [notes, setNotes] = useState(initialState.notes)
   const [showComparison, setShowComparison] = useState(false)
-  const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10))
+  const [startDate, setStartDate] = useState<string>(initialState.startDate)
+  const [targetAmount, setTargetAmount] = useState(initialState.targetAmount)
+  const [monthlyExpenses, setMonthlyExpenses] = useState(initialState.monthlyExpenses)
+  const [safeWithdrawalRate, setSafeWithdrawalRate] = useState(initialState.safeWithdrawalRate)
+  const [delayYears, setDelayYears] = useState(initialState.delayYears)
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          initial,
+          monthly,
+          years,
+          annualPct,
+          reinvest,
+          compounding,
+          annualFeePct,
+          inflationPct,
+          stepUpAnnualPct,
+          taxOnWithdrawPct,
+          notes,
+          scenarios,
+          startDate,
+          targetAmount,
+          monthlyExpenses,
+          safeWithdrawalRate,
+          delayYears,
+        })
+      )
+    } catch (error) {
+      console.error("Nu s-a putut salva starea simulatorului:", error)
+    }
+  }, [
+    initial,
+    monthly,
+    years,
+    annualPct,
+    reinvest,
+    compounding,
+    annualFeePct,
+    inflationPct,
+    stepUpAnnualPct,
+    taxOnWithdrawPct,
+    notes,
+    scenarios,
+    startDate,
+    targetAmount,
+    monthlyExpenses,
+    safeWithdrawalRate,
+    delayYears,
+  ])
 
   // Handlers cu validare
   const handleInitialChange = useCallback(
@@ -404,12 +289,8 @@ export default function App() {
     [initial, monthly, years, annualPct]
   )
 
-  // Simulare
-  const months = years * 12
-  const simulationResult = useMemo(() => {
-    if (inputErrors.length > 0) return null
-    setIsCalculating(true)
-    const result = simulate(initial, monthly, months, annualPct / 100, {
+  const simulationOptions = useMemo(
+    () => ({
       reinvest,
       startDate: new Date(startDate),
       compounding,
@@ -417,10 +298,16 @@ export default function App() {
       inflationPct,
       stepUpAnnualPct,
       taxOnWithdrawPct,
-    })
-    setTimeout(() => setIsCalculating(false), 150)
-    return result
-  }, [initial, monthly, months, annualPct, inputErrors, reinvest, startDate, compounding, annualFeePct, inflationPct, stepUpAnnualPct, taxOnWithdrawPct])
+    }),
+    [reinvest, startDate, compounding, annualFeePct, inflationPct, stepUpAnnualPct, taxOnWithdrawPct]
+  )
+
+  // Simulare
+  const months = years * 12
+  const simulationResult = useMemo(() => {
+    if (inputErrors.length > 0) return null
+    return simulate(initial, monthly, months, annualPct / 100, simulationOptions)
+  }, [initial, monthly, months, annualPct, inputErrors, simulationOptions])
 
   const { rows = [], totalValue = 0, totalContrib = 0, totalGains = 0, yieldPct = 0 } =
     simulationResult || {}
@@ -469,9 +356,28 @@ export default function App() {
       years,
       annualPct,
       color: colors[scenarios.length % colors.length],
+      reinvest,
+      compounding,
+      annualFeePct,
+      inflationPct,
+      stepUpAnnualPct,
+      taxOnWithdrawPct,
     }
     setScenarios((prev) => [...prev, newScenario])
-  }, [initial, monthly, years, annualPct, scenarios.length, inputErrors])
+  }, [
+    initial,
+    monthly,
+    years,
+    annualPct,
+    scenarios.length,
+    inputErrors,
+    reinvest,
+    compounding,
+    annualFeePct,
+    inflationPct,
+    stepUpAnnualPct,
+    taxOnWithdrawPct,
+  ])
 
   const removeScenario = useCallback(
     (id: string) => {
@@ -494,9 +400,21 @@ export default function App() {
     setMonthly(200)
     setYears(10)
     setAnnualPct(8)
+    setReinvest(true)
+    setCompounding("monthly")
+    setAnnualFeePct(0)
+    setInflationPct(2.5)
+    setStepUpAnnualPct(0)
+    setTaxOnWithdrawPct(10)
     setScenarios([])
     setNotes("")
     setActiveScenario(null)
+    setShowComparison(false)
+    setStartDate(toLocalDateInputValue())
+    setTargetAmount(100_000)
+    setMonthlyExpenses(1_500)
+    setSafeWithdrawalRate(4)
+    setDelayYears(3)
     setShowErrors(false)
   }, [])
 
@@ -508,11 +426,74 @@ export default function App() {
         scenario.monthly,
         scenario.years * 12,
         scenario.annualPct / 100,
-        { reinvest, startDate: new Date(startDate) }
+        {
+          reinvest: scenario.reinvest ?? reinvest,
+          startDate: new Date(startDate),
+          compounding: scenario.compounding ?? compounding,
+          annualFeePct: scenario.annualFeePct ?? annualFeePct,
+          inflationPct: scenario.inflationPct ?? inflationPct,
+          stepUpAnnualPct: scenario.stepUpAnnualPct ?? stepUpAnnualPct,
+          taxOnWithdrawPct: scenario.taxOnWithdrawPct ?? taxOnWithdrawPct,
+        }
       )
       return { ...scenario, ...result }
     })
-  }, [scenarios, reinvest, startDate])
+  }, [scenarios, reinvest, startDate, compounding, annualFeePct, inflationPct, stepUpAnnualPct, taxOnWithdrawPct])
+
+  const goalSolver = useMemo(() => {
+    if (!simulationResult || inputErrors.length > 0) return null
+
+    const requiredMonthly = solveMonthlyContributionForTarget(
+      targetAmount,
+      initial,
+      months,
+      annualPct / 100,
+      simulationOptions
+    )
+
+    const yearsNeeded = solveYearsToTarget(
+      targetAmount,
+      initial,
+      monthly,
+      annualPct / 100,
+      simulationOptions
+    )
+
+    const fireNumber = calculateFireNumber(monthlyExpenses, safeWithdrawalRate)
+    const supportedAnnualIncome = calculateSupportedAnnualIncome(totalValue, safeWithdrawalRate)
+    const reachesGoal = totalValue >= targetAmount
+    const reachesFire = totalValue >= fireNumber
+    const delayedMonths = Math.max(0, months - delayYears * 12)
+    const delayedStartValue =
+      delayedMonths > 0
+        ? simulate(initial, monthly, delayedMonths, annualPct / 100, simulationOptions).totalValue
+        : initial
+    const delayCost = totalValue - delayedStartValue
+
+    return {
+      requiredMonthly,
+      yearsNeeded,
+      fireNumber,
+      supportedAnnualIncome,
+      reachesGoal,
+      reachesFire,
+      delayedStartValue,
+      delayCost,
+    }
+  }, [
+    simulationResult,
+    inputErrors,
+    simulationOptions,
+    targetAmount,
+    initial,
+    months,
+    annualPct,
+    monthly,
+    monthlyExpenses,
+    safeWithdrawalRate,
+    totalValue,
+    delayYears,
+  ])
 
   // Quick-start nudges (îi încurajează să înceapă ACUM)
   const quickStarts = [
@@ -544,6 +525,7 @@ export default function App() {
           {[
             { id: "params", label: "Configurare", Icon: Settings },
             { id: "summary", label: "Rezultate", Icon: BarChart3 },
+            { id: "insights", label: "Instrumente", Icon: Target },
             { id: "chart", label: "Grafice", Icon: TrendingUp },
             { id: "scenarios", label: "Scenarii", Icon: PieChart },
             { id: "assumptions", label: "Note", Icon: FileText },
@@ -800,13 +782,73 @@ export default function App() {
                       {/* Data de start (utilizată în etichetele de lună) */}
                       <div className="flex items-center gap-3 text-sm">
                         <Label className="min-w-40">Data de start</Label>
-                        <Input
-                          type="date"
-                          value={startDate}
-                          onChange={(e) => setStartDate(e.target.value)}
-                          className="h-10"
-                          aria-label="Data de start"
-                        />
+                        <div className="flex flex-1 items-center gap-3">
+                          <Input
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="h-10"
+                            aria-label="Data de start"
+                          />
+                          <Button type="button" variant="outline" className="shrink-0" onClick={() => setStartDate(toLocalDateInputValue())}>
+                            Azi
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Graficul și timeline-ul folosesc această dată ca punct real de început, nu etichete abstracte.
+                      </p>
+
+                      <div className="rounded-xl border bg-slate-50 dark:bg-slate-800/60 p-4 space-y-4">
+                        <div>
+                          <Label className="text-sm font-semibold">Setări avansate</Label>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Simulează și efectele inflației, comisioanelor, ritmului de compunere și ale creșterii contribuțiilor.
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+                          <div className="space-y-2">
+                            <Label className="text-xs font-semibold">Compunere</Label>
+                            <Select value={compounding} onValueChange={(value) => setCompounding(value as CompoundingMode)}>
+                              <SelectTrigger className="h-10">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="monthly">Lunară</SelectItem>
+                                <SelectItem value="annual">Anuală</SelectItem>
+                                <SelectItem value="daily">Zilnică</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs font-semibold">Inflație anuală</Label>
+                            <div className="relative">
+                              <Input type="number" step={0.1} value={inflationPct} onChange={(e) => setInflationPct(Math.max(0, Number(e.target.value) || 0))} className="pr-8 h-10" />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">%</span>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs font-semibold">Comision anual</Label>
+                            <div className="relative">
+                              <Input type="number" step={0.1} value={annualFeePct} onChange={(e) => setAnnualFeePct(Math.max(0, Number(e.target.value) || 0))} className="pr-8 h-10" />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">%</span>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs font-semibold">Creștere contribuții</Label>
+                            <div className="relative">
+                              <Input type="number" step={0.1} value={stepUpAnnualPct} onChange={(e) => setStepUpAnnualPct(Math.max(0, Number(e.target.value) || 0))} className="pr-8 h-10" />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">%</span>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs font-semibold">Taxă pe retragere</Label>
+                            <div className="relative">
+                              <Input type="number" step={0.1} value={taxOnWithdrawPct} onChange={(e) => setTaxOnWithdrawPct(Math.max(0, Number(e.target.value) || 0))} className="pr-8 h-10" disabled={reinvest} />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">%</span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -893,6 +935,133 @@ export default function App() {
               </section>
             )}
 
+            {simulationResult && goalSolver && (
+              <section id="insights">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  <Card className="shadow-lg border">
+                    <CardHeader className="border-b bg-slate-50 dark:bg-slate-800">
+                      <CardTitle className="flex items-center gap-2">
+                        <Target className="w-5 h-5 text-indigo-600" /> Goal Solver
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6 space-y-5">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-semibold">Țintă de portofoliu</Label>
+                          <div className="relative">
+                            <Input type="number" min={0} value={targetAmount} onChange={(e) => setTargetAmount(Math.max(0, Number(e.target.value) || 0))} className="pl-8 h-11" />
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">€</span>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-semibold">Ani de întârziere</Label>
+                          <div className="relative">
+                            <Input type="number" min={0} max={20} value={delayYears} onChange={(e) => setDelayYears(Math.max(0, Math.min(20, Number(e.target.value) || 0)))} className="pr-10 h-11" />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">ani</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="rounded-xl border p-4 bg-indigo-50/70 dark:bg-indigo-900/10">
+                          <div className="text-xs text-slate-500 mb-1">Contribuție lunară necesară</div>
+                          <div className="text-2xl font-bold text-indigo-600">
+                            {goalSolver.requiredMonthly !== null ? fmtCurrency(goalSolver.requiredMonthly) : "n/a"}
+                          </div>
+                          <p className="text-xs text-slate-500 mt-2">
+                            Pentru a ajunge la {fmtCurrency(targetAmount)} în {years} ani la {annualPct}% randament anual.
+                          </p>
+                        </div>
+                        <div className="rounded-xl border p-4 bg-blue-50/70 dark:bg-blue-900/10">
+                          <div className="text-xs text-slate-500 mb-1">Ani necesari la ritmul actual</div>
+                          <div className="text-2xl font-bold text-blue-600">
+                            {goalSolver.yearsNeeded !== null ? `${goalSolver.yearsNeeded} ani` : "> 60 ani"}
+                          </div>
+                          <p className="text-xs text-slate-500 mt-2">
+                            Cu {fmtCurrency(monthly)} / lună și {fmtCurrency(initial)} capital inițial.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border p-4 bg-slate-50 dark:bg-slate-800/60">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium">Status obiectiv</span>
+                          <span className={goalSolver.reachesGoal ? "text-green-600 font-semibold" : "text-amber-600 font-semibold"}>
+                            {goalSolver.reachesGoal ? "Pe traiectorie" : "Sub țintă"}
+                          </span>
+                        </div>
+                        <div className="mt-2 text-xs text-slate-500">
+                          Valoarea finală simulată este {fmtCurrency(totalValue)} față de o țintă de {fmtCurrency(targetAmount)}.
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="shadow-lg border">
+                    <CardHeader className="border-b bg-slate-50 dark:bg-slate-800">
+                      <CardTitle className="flex items-center gap-2">
+                        <DollarSign className="w-5 h-5 text-green-600" /> FIRE, venit pasiv și costul amânării
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6 space-y-5">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-semibold">Cheltuieli lunare țintă</Label>
+                          <div className="relative">
+                            <Input type="number" min={0} value={monthlyExpenses} onChange={(e) => setMonthlyExpenses(Math.max(0, Number(e.target.value) || 0))} className="pl-8 h-11" />
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">€</span>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-semibold">Safe withdrawal rate</Label>
+                          <div className="relative">
+                            <Input type="number" step={0.1} min={1} max={10} value={safeWithdrawalRate} onChange={(e) => setSafeWithdrawalRate(Math.max(1, Math.min(10, Number(e.target.value) || 0)))} className="pr-8 h-11" />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">%</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="rounded-xl border p-4 bg-green-50/70 dark:bg-green-900/10">
+                          <div className="text-xs text-slate-500 mb-1">FIRE number estimat</div>
+                          <div className="text-2xl font-bold text-green-600">{fmtCurrency(goalSolver.fireNumber)}</div>
+                          <p className="text-xs text-slate-500 mt-2">
+                            Capital necesar pentru a susține aproximativ {fmtCurrency(monthlyExpenses)}/lună.
+                          </p>
+                        </div>
+                        <div className="rounded-xl border p-4 bg-emerald-50/70 dark:bg-emerald-900/10">
+                          <div className="text-xs text-slate-500 mb-1">Venit anual susținut de portofoliu</div>
+                          <div className="text-2xl font-bold text-emerald-600">{fmtCurrency(goalSolver.supportedAnnualIncome)}</div>
+                          <p className="text-xs text-slate-500 mt-2">
+                            Aproximare simplă: portofoliu final × {safeWithdrawalRate}% pe an.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="rounded-xl border p-4 bg-amber-50/70 dark:bg-amber-900/10">
+                          <div className="text-xs text-slate-500 mb-1">Costul amânării cu {delayYears} ani</div>
+                          <div className="text-2xl font-bold text-amber-600">{fmtCurrency(goalSolver.delayCost)}</div>
+                          <p className="text-xs text-slate-500 mt-2">
+                            Diferența dintre valoarea curentă și scenariul în care începi mai târziu.
+                          </p>
+                        </div>
+                        <div className="rounded-xl border p-4 bg-slate-50 dark:bg-slate-800/60">
+                          <div className="text-xs text-slate-500 mb-1">Status independență financiară</div>
+                          <div className={`text-2xl font-bold ${goalSolver.reachesFire ? "text-green-600" : "text-rose-600"}`}>
+                            {goalSolver.reachesFire ? "Aproape acolo" : "Încă în construcție"}
+                          </div>
+                          <p className="text-xs text-slate-500 mt-2">
+                            Portofoliul final {goalSolver.reachesFire ? "depășește" : "nu atinge încă"} pragul FIRE estimat.
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </section>
+            )}
+
             {/* Chart */}
             {simulationResult && (
               <section id="chart">
@@ -903,7 +1072,7 @@ export default function App() {
                         <BarChart3 className="w-5 h-5 text-purple-600" /> Evoluția detaliată a investiției
                       </div>
                       <div className="flex items-center gap-2">
-                        <Select value={chartType} onValueChange={(v) => setChartType(v as any)}>
+                        <Select value={chartType} onValueChange={(value) => setChartType(value as ChartType)}>
                           <div className="w-32">
                             <SelectTrigger>
                               <SelectValue />
@@ -1119,6 +1288,10 @@ export default function App() {
                                 <span className="text-slate-500">Randament:</span>
                                 <span className="font-medium">{scenario.annualPct}%</span>
                               </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">Inflație:</span>
+                                <span className="font-medium">{scenario.inflationPct ?? inflationPct}%</span>
+                              </div>
                             </div>
 
                             {/* Rezultate rapide pentru scenariu */}
@@ -1141,6 +1314,12 @@ export default function App() {
                                 setMonthly(scenario.monthly)
                                 setYears(scenario.years)
                                 setAnnualPct(scenario.annualPct)
+                                setReinvest(scenario.reinvest ?? reinvest)
+                                setCompounding(scenario.compounding ?? compounding)
+                                setAnnualFeePct(scenario.annualFeePct ?? annualFeePct)
+                                setInflationPct(scenario.inflationPct ?? inflationPct)
+                                setStepUpAnnualPct(scenario.stepUpAnnualPct ?? stepUpAnnualPct)
+                                setTaxOnWithdrawPct(scenario.taxOnWithdrawPct ?? taxOnWithdrawPct)
                                 setActiveScenario(scenario.id)
                                 scrollTo("params")
                               }}
@@ -1307,6 +1486,7 @@ export default function App() {
             {[
               { id: "params", label: "Configurare", Icon: Settings },
               { id: "summary", label: "Rezultate", Icon: BarChart3 },
+              { id: "insights", label: "Instrumente", Icon: Target },
               { id: "chart", label: "Grafice", Icon: TrendingUp },
               { id: "scenarios", label: "Scenarii", Icon: PieChart },
               { id: "assumptions", label: "Note", Icon: FileText },

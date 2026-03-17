@@ -2,8 +2,8 @@ import './globals.css'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'FinApp - Personal Finance Manager',
-  description: 'Simulare investiții și management financiar personal',
+  title: 'InvestSim - Investment Planning Simulator',
+  description: 'Simulare investiții, scenarii financiare, FIRE și planificare pe termen lung',
 }
 
 export default function RootLayout({
