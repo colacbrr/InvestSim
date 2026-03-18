@@ -181,6 +181,7 @@ At the current checkpoint:
 - [docs/ARCHITECTURE.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/ARCHITECTURE.md)
 - [docs/MATH_MODEL.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/MATH_MODEL.md)
 - [docs/PHONE_TESTING.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/PHONE_TESTING.md)
+- [docs/DEPLOYMENT.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/DEPLOYMENT.md)
 - [docs/ROADMAP.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/ROADMAP.md)
 - [docs/KNOWN_LIMITATIONS.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/KNOWN_LIMITATIONS.md)
 - [docs/PERFORMANCE_PRINCIPLES.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/PERFORMANCE_PRINCIPLES.md)

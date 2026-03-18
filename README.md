@@ -43,13 +43,14 @@ behavior are documented and structured.
 3. Read [docs/ARCHITECTURE.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/ARCHITECTURE.md) to navigate the codebase.
 4. Read [docs/MATH_MODEL.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/MATH_MODEL.md) to understand the simulator assumptions and current formulas.
 5. Read [docs/PHONE_TESTING.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/PHONE_TESTING.md) for real mobile testing guidance.
-6. Read [docs/ROADMAP.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/ROADMAP.md) for the compressed execution order.
-7. Read [docs/KNOWN_LIMITATIONS.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/KNOWN_LIMITATIONS.md) for current constraints.
-8. Read [docs/PERFORMANCE_PRINCIPLES.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/PERFORMANCE_PRINCIPLES.md) for speed and UX guardrails.
-9. Read [TODO_NEXT.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/TODO_NEXT.md) for the active implementation checklist.
-10. Read [TOP_200_IMPROVEMENTS.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/TOP_200_IMPROVEMENTS.md) for the long-range roadmap.
-11. Read [V1_PLUS_BACKEND_120.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/V1_PLUS_BACKEND_120.md) for the actual phased execution plan for `v1` and the first backend/user expansion.
-12. Read [DATA_MODEL.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/DATA_MODEL.md) for the first real auth/cloud-sync database design.
+6. Read [docs/DEPLOYMENT.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/DEPLOYMENT.md) for the GitHub Actions + Vercel deployment flow.
+7. Read [docs/ROADMAP.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/ROADMAP.md) for the compressed execution order.
+8. Read [docs/KNOWN_LIMITATIONS.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/KNOWN_LIMITATIONS.md) for current constraints.
+9. Read [docs/PERFORMANCE_PRINCIPLES.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/PERFORMANCE_PRINCIPLES.md) for speed and UX guardrails.
+10. Read [TODO_NEXT.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/TODO_NEXT.md) for the active implementation checklist.
+11. Read [TOP_200_IMPROVEMENTS.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/TOP_200_IMPROVEMENTS.md) for the long-range roadmap.
+12. Read [V1_PLUS_BACKEND_120.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/V1_PLUS_BACKEND_120.md) for the actual phased execution plan for `v1` and the first backend/user expansion.
+13. Read [DATA_MODEL.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/DATA_MODEL.md) for the first real auth/cloud-sync database design.
 
 ## Current Stack
 

@@ -6,6 +6,10 @@ import type {
   SimulationResult,
 } from "@/packages/shared/types"
 
+export const remoteScenarioSyncEnabled =
+  process.env.NEXT_PUBLIC_ENABLE_REMOTE_SCENARIO_SYNC === "true" ||
+  process.env.NODE_ENV !== "production"
+
 export async function postSimulation(request: SimulationRequest): Promise<SimulationResult> {
   const response = await fetch("/api/simulate", {
     method: "POST",
@@ -25,6 +29,10 @@ export async function postSimulation(request: SimulationRequest): Promise<Simula
 }
 
 export async function listSavedScenarios(): Promise<ScenarioWithVersion[]> {
+  if (!remoteScenarioSyncEnabled) {
+    return []
+  }
+
   const response = await fetch("/api/scenarios")
   const payload = (await response.json()) as { ok: boolean; data?: ScenarioWithVersion[] }
 
@@ -38,6 +46,10 @@ export async function listSavedScenarios(): Promise<ScenarioWithVersion[]> {
 export async function createSavedScenario(
   request: Omit<SaveScenarioInput, "userId">
 ): Promise<ScenarioWithVersion> {
+  if (!remoteScenarioSyncEnabled) {
+    throw new Error("scenario_sync_disabled")
+  }
+
   const response = await fetch("/api/scenarios", {
     method: "POST",
     headers: {
@@ -56,6 +68,10 @@ export async function createSavedScenario(
 }
 
 export async function deleteSavedScenario(scenarioId: string): Promise<void> {
+  if (!remoteScenarioSyncEnabled) {
+    return
+  }
+
   const response = await fetch(`/api/scenarios/${scenarioId}`, {
     method: "DELETE",
   })

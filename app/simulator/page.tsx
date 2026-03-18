@@ -55,6 +55,7 @@ import {
   deleteSavedScenario,
   listSavedScenarios,
   postSimulation,
+  remoteScenarioSyncEnabled,
 } from "@/lib/simulation/client"
 import { mapStoredScenarioToScenario } from "@/lib/scenarios/persistence"
 import {
@@ -614,6 +615,10 @@ export default function App() {
       }))
 
       setScenarios((prev) => [...prev, ...normalized])
+      if (!remoteScenarioSyncEnabled) {
+        return
+      }
+
       void Promise.all(
         normalized.map((scenario) =>
           createSavedScenario({
@@ -679,6 +684,11 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (!remoteScenarioSyncEnabled) {
+      setServerScenariosLoaded(true)
+      return
+    }
+
     if (serverScenariosLoaded) return
 
     let cancelled = false
@@ -744,6 +754,10 @@ export default function App() {
     }
     setScenarios((prev) => [...prev, newScenario])
 
+    if (!remoteScenarioSyncEnabled) {
+      return
+    }
+
     void createSavedScenario({
       title: newScenario.name,
       color: newScenario.color,
@@ -783,7 +797,7 @@ export default function App() {
         return prev.filter((s) => s.id !== id)
       })
       if (activeScenario === id) setActiveScenario(null)
-      if (!isPersistedScenarioId(id)) return
+      if (!remoteScenarioSyncEnabled || !isPersistedScenarioId(id)) return
 
       void deleteSavedScenario(id).catch((error) => {
         console.error("Failed to remove scenario:", error)
@@ -809,6 +823,10 @@ export default function App() {
 
       const index = prev.findIndex((entry) => entry.id === id)
       if (index === -1) return [...prev, duplicate]
+
+      if (!remoteScenarioSyncEnabled) {
+        return [...prev.slice(0, index + 1), duplicate, ...prev.slice(index + 1)]
+      }
 
       void createSavedScenario({
         title: duplicate.name,
