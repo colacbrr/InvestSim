@@ -16,6 +16,8 @@ export function simulate(
   const inflation = (options?.inflationPct ?? 0) / 100
   const withdrawalTax = (options?.taxOnWithdrawPct ?? 0) / 100
   const stepUp = (options?.stepUpAnnualPct ?? 0) / 100
+  const oneTimeDeposits = options?.oneTimeDeposits ?? []
+  const contributionPauses = options?.contributionPauses ?? []
 
   const monthlyRate = Math.pow(1 + annualRate, 1 / 12) - 1
   const feeFactor = Math.pow(1 - annualFee, 1 / 12)
@@ -32,9 +34,17 @@ export function simulate(
     const balanceBeforeContrib = balance
     const yearsPassed = Math.floor((month - 1) / 12)
     const steppedMonthly = monthly * Math.pow(1 + stepUp, yearsPassed)
+    const isPaused = contributionPauses.some(
+      (pause) => month >= pause.startMonth && month <= pause.endMonth
+    )
+    const monthlyContribution = isPaused ? 0 : steppedMonthly
+    const depositThisMonth = oneTimeDeposits
+      .filter((deposit) => deposit.month === month)
+      .reduce((sum, deposit) => sum + deposit.amount, 0)
+    const totalContributionThisMonth = monthlyContribution + depositThisMonth
 
-    balance += steppedMonthly
-    contribSoFar += steppedMonthly
+    balance += totalContributionThisMonth
+    contribSoFar += totalContributionThisMonth
 
     let growthThisMonth = 0
     if (compounding === "monthly" || compounding === "daily") {
@@ -57,7 +67,7 @@ export function simulate(
     const realWealth = wealth / deflator(month)
     const monthlyGrowthPct =
       balanceBeforeContrib > 0
-        ? ((balance - balanceBeforeContrib - steppedMonthly) / balanceBeforeContrib) * 100
+        ? ((balance - balanceBeforeContrib - totalContributionThisMonth) / balanceBeforeContrib) * 100
         : 0
 
     monthlyGrowth.push(monthlyGrowthPct)

@@ -14,14 +14,23 @@ The current app already supports:
 - CSV export
 - saved comparison scenarios
 - local persistence for scenarios, notes, assumptions, and planning targets
+- shareable URL state for the main simulator parameters
 - local start date auto-selection based on the user timezone
 - real calendar dates on the simulation timeline
+- bilingual UI foundation with `ro/en` language switching
 - responsive charts and a mobile drawer UI
 - approximate annual IRR / TIR calculation
 - goal solver for target portfolio size
 - estimated years-to-target solver
 - simple FIRE number and supported-income estimation
 - “cost of waiting” analysis for delayed start scenarios
+- first extracted simulator UI components under `components/simulator/`
+- deterministic math tests with `Vitest`
+- smoother numeric form input handling for controlled number fields
+- one-time deposit events
+- contribution pause periods
+- scenario import/export in JSON
+- trust / model explanation panel in the UI
 
 The project is still early, but the simulator is real. The main gap right now
 is not “whether there is any math,” but how clearly that math and product
@@ -39,6 +48,8 @@ behavior are documented and structured.
 8. Read [docs/PERFORMANCE_PRINCIPLES.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/PERFORMANCE_PRINCIPLES.md) for speed and UX guardrails.
 9. Read [TODO_NEXT.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/TODO_NEXT.md) for the active implementation checklist.
 10. Read [TOP_200_IMPROVEMENTS.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/TOP_200_IMPROVEMENTS.md) for the long-range roadmap.
+11. Read [V1_PLUS_BACKEND_120.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/V1_PLUS_BACKEND_120.md) for the actual phased execution plan for `v1` and the first backend/user expansion.
+12. Read [DATA_MODEL.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/DATA_MODEL.md) for the first real auth/cloud-sync database design.
 
 ## Current Stack
 
@@ -47,13 +58,16 @@ behavior are documented and structured.
 - UI: `React`, `Tailwind CSS`, `Radix UI`
 - Charts: `recharts`
 - Linting: `ESLint` flat config
+- Testing: `Vitest`
+- CI: `GitHub Actions`
 
 ## Repository Layout
 
 ```text
 InvestSim/
 ├── app/
-│   ├── api/routes/simulate.ts
+│   ├── api/simulate/route.ts
+│   ├── api/scenarios/
 │   ├── globals.css
 │   ├── layout.tsx
 │   ├── page.tsx
@@ -61,15 +75,21 @@ InvestSim/
 ├── components/ui/
 ├── docs/
 ├── lib/
+│   ├── server/
+│   │   ├── file-scenario-repository.ts
+│   │   └── scenario-repository.ts
 │   └── simulation/
 │       ├── engine.ts
 │       ├── format.ts
 │       ├── irr.ts
+│       ├── request.ts
 │       ├── solvers.ts
 │       └── validation.ts
 ├── packages/shared/
+├── DATA_MODEL.md
 ├── README.md
 ├── STARTUP.md
+├── V1_PLUS_BACKEND_120.md
 └── TOP_200_IMPROVEMENTS.md
 ```
 
@@ -83,6 +103,10 @@ but the simulation math is now extracted into
 [lib/simulation/solvers.ts](/home/brr/Documents/Github-Projects/personal_research/InvestSim/lib/simulation/solvers.ts),
 [lib/simulation/format.ts](/home/brr/Documents/Github-Projects/personal_research/InvestSim/lib/simulation/format.ts),
 and [lib/simulation/validation.ts](/home/brr/Documents/Github-Projects/personal_research/InvestSim/lib/simulation/validation.ts).
+
+The component split has also started in
+[components/simulator/](/home/brr/Documents/Github-Projects/personal_research/InvestSim/components/simulator),
+but the page file is still the main orchestration hotspot.
 
 That file contains:
 
@@ -101,10 +125,33 @@ coupled.
 The repo has been checked locally with:
 
 - `pnpm lint`
+- `pnpm test`
 - `pnpm build`
 - `pnpm exec tsc --noEmit`
 
-All three are now passing in the current repo state.
+All four are now passing in the current repo state.
+
+The repo now also includes CI in
+[ci.yml](/home/brr/Documents/Github-Projects/personal_research/InvestSim/.github/workflows/ci.yml),
+which runs:
+
+- `pnpm lint`
+- `pnpm test`
+- `pnpm build`
+
+## Language Strategy
+
+`InvestSim` should stay as one repo, not separate Romanian and English repos.
+
+The current direction is:
+
+- one shared codebase
+- domain logic and internal code kept language-neutral / English-leaning
+- UI text translated at the presentation layer
+- persisted language preference with browser-language fallback
+
+That avoids product drift and duplicate maintenance while keeping the app ready
+for more languages later.
 
 ## What The App Is Good For Right Now
 
@@ -137,3 +184,16 @@ engineering passes can be done cleanly:
 - break the page into focused components
 - improve mobile and phone testing workflows
 - keep the app fast while the finance feature surface grows
+
+## Current Execution Strategy
+
+The active implementation order is now:
+
+1. finish the `v1` surface cleanly
+2. keep the math trustworthy and tested
+3. keep the UI responsive while splitting the large simulator page
+4. add shareability and import/export
+5. only then start the auth / user / DB layer
+
+The concrete tracking document for that work is
+[V1_PLUS_BACKEND_120.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/V1_PLUS_BACKEND_120.md).

@@ -25,14 +25,14 @@ visible so product decisions stay honest.
 
 - charts are dense on phone
 - advanced assumptions increase cognitive load
-- scenario persistence does not exist yet
-- there is no share-link flow yet
+- there is no polished share-link UX yet, only URL-state serialization
+- event editing for deposits and pauses is still basic and utilitarian
 
 ## Trust Limits
 
 - the app is useful for planning intuition, not regulated advice
-- formulas are not yet surfaced directly in the UI
-- there is no model versioning or assumptions version display yet
+- formulas are still summarized at a high level, not proven step-by-step
+- model versioning is visible in the UI, but not yet formalized as migration metadata
 
 ## What Must Improve Next
 
@@ -41,4 +41,3 @@ visible so product decisions stay honest.
 3. persistence
 4. shareability
 5. better mobile behavior
-

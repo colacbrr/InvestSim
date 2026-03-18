@@ -14,7 +14,8 @@ This is the active execution list, not the long-range dream list.
    - assumptions
    - targets
 6. [x] Add local start-date auto-selection and real calendar labels on the timeline.
-7. [ ] Add tests for:
+7. [x] Add first bilingual UI pass with `ro/en` language switching.
+8. [x] Add tests for:
    - baseline simulation
    - reinvest vs withdraw
    - inflation
@@ -23,28 +24,36 @@ This is the active execution list, not the long-range dream list.
    - required monthly contribution
    - years to target
    - delay cost
-8. [ ] Add URL serialization for the main state.
-9. [ ] Break `app/simulator/page.tsx` into focused domain components.
-10. [ ] Add a compact mobile layout for the new insights panels.
-11. [ ] Add explanatory UI copy for:
+9. [x] Add URL serialization for the main state.
+10. [~] Break `app/simulator/page.tsx` into focused domain components.
+11. [x] Expand translation coverage and remove remaining hardcoded UI strings.
+12. [~] Add a compact mobile layout for the new insights panels.
+13. [x] Add explanatory UI copy for:
     - FIRE number
     - safe withdrawal rate
     - delay cost
+14. [x] Add JSON export/import for scenarios.
+15. [x] Add one-time deposit events.
+16. [x] Add contribution pause periods.
+17. [ ] Add accumulation + withdrawal phases.
+18. [x] Add CI for `lint`, `test`, and `build`.
+19. [x] Create `DATA_MODEL.md` for the future auth + DB layer.
 
 ## Nice To Do Soon
 
-12. [ ] Add preset profiles: conservative, balanced, growth.
-13. [ ] Add one-time deposit events.
-14. [ ] Add contribution pause periods.
-15. [ ] Add retirement withdrawal phase.
-16. [ ] Add tests and route wiring for a real API endpoint.
-17. [ ] Add phone publishing helper inspired by `Remote-Terminal`.
+20. [x] Add preset profiles: conservative, balanced, growth.
+21. [ ] Add retirement withdrawal phase.
+22. [x] Add tests and route wiring for a real API endpoint.
+23. [ ] Add phone publishing helper inspired by `Remote-Terminal`.
+24. [ ] Add auth and cloud-synced scenario storage after local UX is clean.
 
 ## Stable Now
 
 - `pnpm lint`
+- `pnpm test`
 - `pnpm build`
 - `pnpm exec tsc --noEmit`
+- GitHub Actions CI for `lint`, `test`, `build`
 
 ## Do Not Rush
 

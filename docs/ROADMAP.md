@@ -5,6 +5,7 @@ This file is the compressed implementation roadmap for `InvestSim`.
 For the long-form version, see:
 
 - [TOP_200_IMPROVEMENTS.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/TOP_200_IMPROVEMENTS.md)
+- [V1_PLUS_BACKEND_120.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/V1_PLUS_BACKEND_120.md)
 
 ## Current Reality
 
@@ -25,6 +26,15 @@ The app now also has:
 - target-based goal solving
 - FIRE-style planning
 - delay-cost analysis
+- a first bilingual `ro/en` UI layer
+- deterministic test coverage for the current math engine
+- smoother numeric input handling for controlled number fields
+- shareable URL state for core simulator parameters
+- JSON scenario import/export
+- one-time deposits and contribution pauses
+- scenario duplication and reordering
+- a first in-app trust/model panel
+- CI for `lint`, `test`, and `build`
 
 That is a good product step, but it increases the pressure to separate math from
 presentation and keep rendering fast.
@@ -64,6 +74,12 @@ Priority items:
 - extract CSV export
 - add test coverage for deterministic cases
 
+Status:
+
+- core math extraction done
+- first test suite added and passing
+- next pressure point is still page-size and UI separation
+
 ## Phase 3: Improve Product Trust
 
 Goals:
@@ -94,8 +110,16 @@ Priority items:
 - URL sharing
 - narrow-screen scenario redesign
 - chart improvements for touch devices
+- continue moving hardcoded UI copy into translation dictionaries
 - Tailscale-style remote test workflow
 - performance discipline as the page grows
+
+Status:
+
+- local persistence done
+- URL state done
+- JSON scenario import/export done
+- scenario workflow is now stronger with duplicate and reorder
 
 ## Phase 5: Make It a Serious Financial Tool
 
@@ -112,6 +136,12 @@ Priority items:
 - accumulation + withdrawal phases
 - fee drag and inflation sensitivity
 - solver tools for target amount / target date / required return
+
+Status:
+
+- one-time deposits done
+- pause periods done
+- accumulation + withdrawal phases still pending
 
 ## Phase 6: Make It a Large Project
 
@@ -130,16 +160,31 @@ Priority items:
 - report generation
 - persistence and collaboration
 
+## Phase 7: Users, Auth, and Cloud Sync
+
+Goals:
+
+- keep the fast local-first simulator workflow
+- add optional accounts and multi-device continuity
+- introduce backend complexity only after the v1 surface is stable
+
+Priority items:
+
+- define a real data model
+- add auth
+- add cloud-synced scenarios
+- add version history and shared links
+- add user preferences and multi-device restore
+
 ## Recommended Next 10 Tasks
 
-1. Extract the math engine from `app/simulator/page.tsx`.
-2. Add tests for simulation and IRR.
-3. Add tests for goal solver, FIRE, and delay-cost logic.
-4. Expand `packages/shared/types.ts`.
-5. Replace the current API route with a cleaner validated route.
-6. Add local scenario persistence.
-7. Add shareable URL state.
-8. Add a better mobile chart strategy.
-9. Add Tailscale-oriented remote test helper script.
-10. Add fee / inflation / solver explanation panels.
-
+1. Finish breaking the simulator page into smaller components.
+2. Expand translation coverage and keep strings out of page logic.
+3. Improve compact mobile treatment for summary and scenario cards.
+4. Add accumulation + withdrawal phases.
+5. Add a cleaner event editor UX for deposits and pauses.
+6. Add route/API alignment with the shared simulation engine.
+7. Add stronger solver explanation copy and formula references.
+8. Add a phone testing / publish helper inspired by `Remote-Terminal`.
+9. Create the first `DATA_MODEL.md` for future auth + DB work.
+10. Start the first backend boundary only after the v1 UI surface is stable.

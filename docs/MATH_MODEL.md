@@ -23,6 +23,8 @@ The simulator currently accepts or internally supports:
 - inflation percentage
 - tax on withdrawn gains
 - annual contribution step-up percentage
+- one-time deposit events by month
+- contribution pause periods by month range
 
 In the UI today, only some of these are fully exposed.
 The current UI now exposes most of them directly, along with target and FIRE
@@ -114,6 +116,31 @@ monthlyContribution * (1 + stepUpRate)^(yearsPassed)
 
 This is useful for modeling salary growth or gradually increasing investment
 discipline.
+
+## One-Time Deposits
+
+The engine now supports one-time deposits on specific months.
+
+Current behavior:
+
+1. identify deposits scheduled for the current month
+2. add them to the balance before growth
+3. count them as contributions in cumulative contribution tracking
+
+This is useful for bonuses, inheritance, or planned lump-sum top-ups.
+
+## Contribution Pause Periods
+
+The engine now supports pause ranges for monthly contributions.
+
+Current behavior:
+
+1. determine whether the current month falls inside any pause period
+2. if yes, recurring monthly contribution for that month becomes `0`
+3. one-time deposits can still be added in paused months
+
+This is useful for career breaks, unemployment stress tests, or temporary cash
+diversion.
 
 ## Output Rows
 

@@ -58,12 +58,14 @@ pnpm dev
 pnpm build
 pnpm start
 pnpm lint
+pnpm test
 pnpm exec tsc --noEmit
 ```
 
 Notes:
 
 - linting now uses `eslint.config.mjs` with flat config
+- tests use `Vitest`
 - the repo currently builds cleanly with `pnpm build`
 - type checking is verified with `pnpm exec tsc --noEmit`
 
@@ -93,11 +95,22 @@ The app already supports:
 - years-to-target solver
 - FIRE number and supported-income estimation
 - delay-cost analysis
+- one-time deposit events
+- contribution pause periods
+- quick presets
 - scenario saving and comparison
+- scenario duplication and reordering
 - CSV export
+- JSON scenario import/export
 - browser-local persistence for the working simulator state
+- URL-based restoration for main simulator parameters
 - local auto-selected start date based on the user timezone
 - real calendar dates on the chart timeline derived from the chosen start date
+- Romanian / English UI switching with persisted language preference
+- extracted math modules with deterministic test coverage
+- smoother numeric editing in the simulator forms
+- in-app trust/model explanation panel
+- GitHub Actions CI for lint, test, and build
 
 ## Local Testing Checklist
 
@@ -112,6 +125,13 @@ After opening `/simulator`, verify these first:
 7. Refresh the page and confirm state persistence works.
 8. Export a CSV and confirm it downloads.
 9. Change the start date and confirm the chart labels move to real calendar dates.
+10. Switch between `RO` and `EN` and confirm the language preference persists.
+11. Add a one-time deposit and confirm total contributions change.
+12. Add a contribution pause and confirm monthly investing drops in the paused period.
+13. Export scenarios to JSON and import them back.
+14. Confirm the URL updates as core parameters change.
+15. Duplicate a scenario and move it up/down in the list.
+16. Check the trust/model panel and confirm the explanatory copy is visible.
 
 ## Phone Testing
 
@@ -133,22 +153,24 @@ Recommended checks:
 ## Known Current Gaps
 
 - `app/simulator/page.tsx` is still too large and should be split into components
-- there are no real automated tests yet for the extracted simulation modules
+- the component split is only partially done
 - the API route is still not the main math execution path
-- URL-based scenario sharing does not exist yet
+- URL-based scenario comparison sharing still does not exist yet
+- there is no real user/auth/database layer yet
 
 ## Recommended Next Work
 
-1. Add tests for `lib/simulation/*`.
-2. Add URL serialization for the main simulator state.
-3. Break the simulator page into focused UI components.
-4. Align the API route with the shared simulation engine.
+1. Finish the component split of the simulator page.
+2. Add accumulation + withdrawal phases.
+3. Improve compact mobile layout for summary and scenario cards.
+4. Create the first `DATA_MODEL.md` for future user/auth/database work.
 
 ## Validation Status
 
 At the current checkpoint:
 
 - `pnpm lint` passes
+- `pnpm test` passes
 - `pnpm build` passes
 - `pnpm exec tsc --noEmit` passes
 
@@ -163,3 +185,4 @@ At the current checkpoint:
 - [docs/KNOWN_LIMITATIONS.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/KNOWN_LIMITATIONS.md)
 - [docs/PERFORMANCE_PRINCIPLES.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/docs/PERFORMANCE_PRINCIPLES.md)
 - [TODO_NEXT.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/TODO_NEXT.md)
+- [V1_PLUS_BACKEND_120.md](/home/brr/Documents/Github-Projects/personal_research/InvestSim/V1_PLUS_BACKEND_120.md)
