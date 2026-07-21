@@ -3,6 +3,8 @@
 `InvestSim` is a Next.js investment simulator focused on long-horizon personal
 finance planning.
 
+Portfolio case study: https://cristiancolacel.com/projects/investsim
+
 The current app already supports:
 
 - monthly contribution simulation
